@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1709225374" />
+    <testcase name="test_top_simple_fw" classname="test_mqnic_app_block_scheduler" file="/home/leomo/syncthing/Corundum_dev/corundum/fpga/app/data_processing/Scheduler/tb/mqnic_app_block_scheduler/test_mqnic_app_block_scheduler.py" lineno="20" time="3.8736770153045654" sim_time_ns="199740.0" ratio_time="51563.41099447486">
+      <failure />
+    </testcase>
+  </testsuite>
+</testsuites>

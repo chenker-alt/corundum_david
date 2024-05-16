@@ -10,7 +10,7 @@ module top_packet_dispatcher #(
     parameter AXIL_APP_CTRL_STRB_WIDTH = (AXIL_APP_CTRL_DATA_WIDTH/8),
 
     // Parser/Mat/deparser configuration
-    parameter META_DATA_WIDTH_MAX=272,
+    parameter META_DATA_WIDTH_MAX=96,
     parameter COUNT_META_DATA_MAX=(META_DATA_WIDTH_MAX/AXIS_DATA_WIDTH)+1,
     parameter COUNTER_WIDTH= $clog2(COUNT_META_DATA_MAX+1),
 
@@ -24,7 +24,15 @@ module top_packet_dispatcher #(
     parameter CONTROL               = 2,
     parameter SEND_ANALYSED_DATA    = 3,
     parameter SEND_REMAIN           = 4,
-    parameter DROP                  = 5
+    parameter DROP                  = 5,
+    parameter TCAM_INIT             = 6,
+
+    //TCAM parameter
+    parameter TCAM_ADDR_WIDTH=4,
+    parameter TCAM_KEY_WIDTH =META_DATA_WIDTH_MAX,
+    parameter TCAM_DATA_WIDTH=4,
+    parameter TCAM_MASK_DISABLE=0,
+    parameter TCAM_RAM_STYLE="block"
 )
 (
     // System (internal at interface module)
@@ -62,44 +70,27 @@ module top_packet_dispatcher #(
     //wire axis_dp_multiplexeur/parser
     wire [AXIS_DATA_WIDTH-1:0] w_axis_parser_multiplexeur_tdata;
 
-    //wire parser/deparser
-    wire [COUNT_META_DATA_MAX*AXIS_DATA_WIDTH -1:0] w_meta_tdata;
+    //wire parser/TCAM
+    wire [TCAM_KEY_WIDTH-1:0] w_tcam_req_key;
 
-    //wire parser/mat
+    //wire FSM/TCAM
+    wire w_tcam_req_valid;
+    wire w_tcam_req_ready;
+    wire w_tcam_res_valid;
+    wire w_tcam_res_null;
+    wire [TCAM_DATA_WIDTH-1:0] w_tcam_res_data;
 
-        // Ethernet
-    wire [47:0] w_parsed_Mac_dest;
-    wire        w_valid_parsed_Mac_dest;
-    wire [47:0] w_parsed_Mac_src;
-    wire        w_valid_parsed_Mac_src;
-    wire [15:0] w_parsed_ethtype;
-    wire        w_valid_parsed_ethtype;
+    wire w_end_init_tcam;
 
-        // IPv4
-    wire [7:0]  w_parsed_IHL;
-    wire        w_valid_parsed_IHL;
-    wire [5:0]  w_parsed_DSCP;
-    wire        w_valid_parsed_DSCP;
-    wire [1:0]  w_parsed_ECN;
-    wire        w_valid_parsed_ECN;
-    wire [15:0] w_parsed_Length;
-    wire        w_valid_parsed_Length;
-    wire [15:0] w_parsed_Identifiant;
-    wire        w_valid_parsed_Identifiant;
-    wire [15:0] w_parsed_Flags_FragmentOffset;
-    wire        w_valid_parsed_Flags_FragmentOffset;
-    wire [7:0]  w_parsed_TTL;
-    wire        w_valid_parsed_TTL;
-    wire [7:0]  w_parsed_Protocol;
-    wire        w_valid_parsed_Protocol;
-    wire [15:0] w_parsed_HeaderChecksum;
-    wire        w_valid_parsed_HeaderChecksum;
-    wire [31:0] w_parsed_src_Ipv4;
-    wire        w_valid_parsed_src_Ipv4;
-    wire [31:0] w_parsed_dest_Ipv4;
-    wire        w_valid_parsed_dest_Ipv4;
-
-    // wire FSM_dp_orchestrator_inst/others
+    // //wire AXIL/TCAM
+    wire [TCAM_ADDR_WIDTH-1:0]  w_tcam_set_addr;
+    wire [TCAM_DATA_WIDTH-1:0]  w_tcam_set_data;
+    wire [TCAM_KEY_WIDTH-1:0]   w_tcam_set_key;
+    wire [TCAM_KEY_WIDTH-1:0]   w_tcam_set_xmask;
+    wire                        w_tcam_set_clear;
+    wire                        w_tcam_set_valid;
+    
+    // wire FSM STATE
     wire [(STATE_WIDTH)-1:0] w_state;
     wire [(COUNTER_WIDTH)-1:0] w_count;
 
@@ -165,13 +156,15 @@ module top_packet_dispatcher #(
     .s_axis_parser_to_multiplexeur_tdata(w_axis_parser_multiplexeur_tdata)   
     );
 
-    buffer_parser_packet_dispatcher #(
+    buffer #(
     .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
     .AXIS_KEEP_WIDTH(AXIS_KEEP_WIDTH),
     .AXIS_DEST_WIDTH(AXIS_DEST_WIDTH),
     
     .COUNT_META_DATA_MAX(COUNT_META_DATA_MAX),
     .COUNTER_WIDTH(COUNTER_WIDTH),
+    .BUFFER_DATA_WIDTH(BUFFER_DATA_WIDTH),
+    .TCAM_KEY_WIDTH(TCAM_KEY_WIDTH),
 
     .IDLE(IDLE),
     .PARSE_DATA(PARSE_DATA),
@@ -180,7 +173,8 @@ module top_packet_dispatcher #(
     .SEND_REMAIN(SEND_REMAIN),
     .DROP(DROP)
     )
-    buffer_parser_packet_dispatcher_inst
+
+    buffer_inst
     (
         .clk(clk),
 
@@ -191,112 +185,33 @@ module top_packet_dispatcher #(
 
         .m_axis_parser_tdata(w_axis_parser_multiplexeur_tdata),
 
-        .parsed_Mac_dest(w_parsed_Mac_dest),
-        .valid_parsed_Mac_dest(w_valid_parsed_Mac_dest),
-        .parsed_Mac_src(w_parsed_Mac_src),
-        .valid_parsed_Mac_src(w_valid_parsed_Mac_src),
-        .parsed_ethtype(w_parsed_ethtype),
-        .valid_parsed_ethtype(w_valid_parsed_ethtype),
-
-        .parsed_IHL(w_parsed_IHL),
-        .valid_parsed_IHL(w_valid_parsed_IHL),
-        .parsed_DSCP(w_parsed_DSCP),
-        .valid_parsed_DSCP(w_valid_parsed_DSCP),
-        .parsed_ECN(w_parsed_ECN),
-        .valid_parsed_ECN(w_valid_parsed_ECN),
-        .parsed_Length(w_parsed_Length),
-        .valid_parsed_Length(w_valid_parsed_Length),
-        .parsed_Identifiant(w_parsed_Identifiant),
-        .valid_parsed_Identifiant(w_valid_parsed_Identifiant),
-        .parsed_Flags_FragmentOffset(w_parsed_Flags_FragmentOffset),
-        .valid_parsed_Flags_FragmentOffset(w_valid_parsed_Flags_FragmentOffset),
-        .parsed_TTL(w_parsed_TTL),
-        .valid_parsed_TTL(w_valid_parsed_TTL),
-        .parsed_Protocol(w_parsed_Protocol),
-        .valid_parsed_Protocol(w_valid_parsed_Protocol),
-        .parsed_HeaderChecksum(w_parsed_HeaderChecksum),
-        .valid_parsed_HeaderChecksum(w_valid_parsed_HeaderChecksum),
-        .parsed_src_Ipv4(w_parsed_src_Ipv4),
-        .valid_parsed_src_Ipv4(w_valid_parsed_src_Ipv4),
-        .parsed_dest_Ipv4(w_parsed_dest_Ipv4),
-        .valid_parsed_dest_Ipv4(w_valid_parsed_dest_Ipv4)
-    );
-
-    mat_packet_dispatcher #(
-    .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
-    .AXIS_KEEP_WIDTH(AXIS_KEEP_WIDTH),
-    .AXIS_DEST_WIDTH(AXIS_DEST_WIDTH),
-
-    .IDLE(IDLE),
-    .PARSE_DATA(PARSE_DATA),
-    .CONTROL(CONTROL),
-    .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
-    .SEND_REMAIN(SEND_REMAIN),
-    .DROP(DROP)
-    )
-
-    mat_packet_dispatcher_inst
-    (
-        .clk(clk),
-        .rst(rst),
-
-        .state(w_state),
-
-        .parsed_Mac_dest(w_parsed_Mac_dest),
-        .valid_parsed_Mac_dest(w_valid_parsed_Mac_dest),
-        .parsed_Mac_src(w_parsed_Mac_src),
-        .valid_parsed_Mac_src(w_valid_parsed_Mac_src),
-        .parsed_ethtype(w_parsed_ethtype),
-        .valid_parsed_ethtype(w_valid_parsed_ethtype),
-
-        .parsed_IHL(w_parsed_IHL),
-        .valid_parsed_IHL(w_valid_parsed_IHL),
-        .parsed_DSCP(w_parsed_DSCP),
-        .valid_parsed_DSCP(w_valid_parsed_DSCP),
-        .parsed_ECN(w_parsed_ECN),
-        .valid_parsed_ECN(w_valid_parsed_ECN),
-        .parsed_Length(w_parsed_Length),
-        .valid_parsed_Length(w_valid_parsed_Length),
-        .parsed_Identifiant(w_parsed_Identifiant),
-        .valid_parsed_Identifiant(w_valid_parsed_Identifiant),
-        .parsed_Flags_FragmentOffset(w_parsed_Flags_FragmentOffset),
-        .valid_parsed_Flags_FragmentOffset(w_valid_parsed_Flags_FragmentOffset),
-        .parsed_TTL(w_parsed_TTL),
-        .valid_parsed_TTL(w_valid_parsed_TTL),
-        .parsed_Protocol(w_parsed_Protocol),
-        .valid_parsed_Protocol(w_valid_parsed_Protocol),
-        .parsed_HeaderChecksum(w_parsed_HeaderChecksum),
-        .valid_parsed_HeaderChecksum(w_valid_parsed_HeaderChecksum),
-        .parsed_src_Ipv4(w_parsed_src_Ipv4),
-        .valid_parsed_src_Ipv4(w_valid_parsed_src_Ipv4),
-        .parsed_dest_Ipv4(w_parsed_dest_Ipv4),
-        .valid_parsed_dest_Ipv4(w_valid_parsed_dest_Ipv4),
-
-        .drop(w_drop),
-
-        .configurable_ipv4_address(w_configurable_ipv4_address),
-
-        .m_axis_mat_tdest(m_axis_top_packet_dispatcher_tdest)
-
+        .tcam_key(w_tcam_req_key)
     );
 
     FSM_packet_dispatcher #(
-    .COUNT_META_DATA_MAX(COUNT_META_DATA_MAX),
-    .COUNTER_WIDTH(COUNTER_WIDTH),
+        .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
+        .AXIS_KEEP_WIDTH(AXIS_KEEP_WIDTH),
+        .AXIS_DEST_WIDTH(AXIS_DEST_WIDTH),
 
-    .IDLE(IDLE),
-    .PARSE_DATA(PARSE_DATA),
-    .CONTROL(CONTROL),
-    .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
-    .SEND_REMAIN(SEND_REMAIN),
-    .DROP(DROP),
+        .AXIL_APP_CTRL_DATA_WIDTH(AXIL_APP_CTRL_DATA_WIDTH),
+        .AXIL_APP_CTRL_ADDR_WIDTH(AXIL_APP_CTRL_ADDR_WIDTH),
+        .AXIL_APP_CTRL_STRB_WIDTH(AXIL_APP_CTRL_STRB_WIDTH),
 
-    .AXIL_APP_CTRL_DATA_WIDTH(AXIL_APP_CTRL_DATA_WIDTH),
-    .AXIL_APP_CTRL_ADDR_WIDTH(AXIL_APP_CTRL_ADDR_WIDTH),
-    .AXIL_APP_CTRL_STRB_WIDTH(AXIL_APP_CTRL_STRB_WIDTH)
+        .META_DATA_WIDTH_MAX(META_DATA_WIDTH_MAX),
+        .COUNT_META_DATA_MAX(COUNT_META_DATA_MAX),
+        .COUNTER_WIDTH(COUNTER_WIDTH),
+        .BUFFER_DATA_WIDTH(BUFFER_DATA_WIDTH),
+
+        .STATE_WIDTH(STATE_WIDTH),
+        .IDLE(IDLE),
+        .PARSE_DATA(PARSE_DATA),
+        .CONTROL(CONTROL),
+        .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
+        .SEND_REMAIN(SEND_REMAIN),
+        .DROP(DROP),
+        .TCAM_INIT(TCAM_INIT)
     )
     FSM_packet_dispatcher_inst(
-
         .clk(clk),
         .rst(rst),
 
@@ -306,11 +221,13 @@ module top_packet_dispatcher #(
         .s_axis_FSM_tkeep(s_axis_top_packet_dispatcher_tkeep),
 
         .m_axis_FSM_tlast(m_axis_top_packet_dispatcher_tlast),
+        .m_axis_FSM_tdest(m_axis_top_packet_dispatcher_tdest),
         .m_axis_FSM_tvalid(m_axis_top_packet_dispatcher_tvalid),
         .m_axis_FSM_tready(m_axis_top_packet_dispatcher_tready),
         .m_axis_FSM_tkeep(m_axis_top_packet_dispatcher_tkeep),
 
-        .drop(w_drop),
+        .reg_tcam_req_valid(w_tcam_req_valid),
+        .tcam_req_ready(w_tcam_req_ready),
 
         .state(w_state),
         .count(w_count),
@@ -318,6 +235,82 @@ module top_packet_dispatcher #(
         .enable_dp(w_enable_dp),
         .rst_drop_counter(w_rst_drop_counter),
 
-        .reg_drop_counter(w_drop_counter)
+        .reg_drop_counter(w_drop_counter),
+
+        .tcam_res_valid(w_tcam_res_valid),
+        .tcam_res_null(w_tcam_res_null),
+        .tcam_res_data(w_tcam_res_data),
+
+        .end_init_tcam(w_end_init_tcam)
     );
+
+    // reg [TCAM_ADDR_WIDTH-1:0] w_tcam_set_addr=0;
+    // reg [TCAM_DATA_WIDTH-1:0] w_tcam_set_data=0;
+    // reg [TCAM_KEY_WIDTH-1:0] w_tcam_set_key=0;
+    // reg [TCAM_KEY_WIDTH-1:0] w_tcam_set_xmask=0; 
+    // reg w_tcam_set_clear=0;
+    // reg w_tcam_set_valid=0;
+
+    tcam #(
+    .ADDR_WIDTH(TCAM_ADDR_WIDTH),
+    .KEY_WIDTH(TCAM_KEY_WIDTH),
+    .DATA_WIDTH(TCAM_DATA_WIDTH),
+    .MASK_DISABLE(TCAM_MASK_DISABLE),
+    .RAM_STYLE_DATA(TCAM_RAM_STYLE)
+
+    )
+    tcam_inst(
+    .clk(clk),
+    .rst(rst),
+
+    .set_addr(w_tcam_set_addr),
+    .set_data(w_tcam_set_data),
+    .set_key(w_tcam_set_key),
+    .set_xmask(w_tcam_set_xmask),
+    .set_clr(w_tcam_set_clear),
+    .set_valid(w_tcam_set_valid),
+
+    .req_key(w_tcam_req_key),
+    .req_valid(w_tcam_req_valid),
+    .req_ready(w_tcam_req_ready),
+
+    //.res_addr(),
+    .res_data(w_tcam_res_data),
+    .res_valid(w_tcam_res_valid),
+    .res_null(w_tcam_res_null)
+    );
+
+    init_rst_tcam #(
+    .TCAM_ADDR_WIDTH(TCAM_ADDR_WIDTH),
+    .TCAM_KEY_WIDTH(TCAM_KEY_WIDTH),
+    .TCAM_DATA_WIDTH(TCAM_DATA_WIDTH),
+    .TCAM_MASK_DISABLE(TCAM_MASK_DISABLE),
+    .TCAM_RAM_STYLE_DATA(TCAM_RAM_STYLE),
+    
+    .IDLE(IDLE),
+    .PARSE_DATA(PARSE_DATA),
+    .CONTROL(CONTROL),
+    .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
+    .SEND_REMAIN(SEND_REMAIN),
+    .DROP(DROP),
+    .TCAM_INIT(TCAM_INIT)
+    )
+
+    init_rst_tcam_inst(
+
+    .clk(clk),
+    .rst(rst),
+
+    .state(w_state),
+
+    .init_set_addr(w_tcam_set_addr),
+	.init_set_data(w_tcam_set_data),
+	.init_set_key(w_tcam_set_key),
+	.init_set_xmask(w_tcam_set_xmask),
+	.init_set_clr(w_tcam_set_clear),
+	.init_set_valid(w_tcam_set_valid),
+
+    .end_init_tcam(w_end_init_tcam)
+    );
+
 endmodule

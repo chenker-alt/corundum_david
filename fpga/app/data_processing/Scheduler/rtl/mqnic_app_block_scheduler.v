@@ -12,7 +12,7 @@
 /*
  * Application block
  */
-module mqnic_app_block_scheduler #
+module mqnic_app_block #
 (
     // Structural configuration
     parameter IF_COUNT = 4,
@@ -145,7 +145,97 @@ module mqnic_app_block_scheduler #
     // Statistics counter subsystem
     parameter STAT_ENABLE = 1,
     parameter STAT_INC_WIDTH = 24,
-    parameter STAT_ID_WIDTH = 12
+    parameter STAT_ID_WIDTH = 12,
+
+    ///////////////////////
+    ///////SCHED_APP///////
+    ///////////////////////
+
+    // Ethernet interface configuration
+    parameter PORT_COUNT_RX_DOWN = 3,
+    parameter PORT_COUNT_TX_DOWN = 1,
+    parameter PORT_COUNT_RX_UP = IF_COUNT-PORT_COUNT_RX_DOWN,
+    parameter PORT_COUNT_TX_UP = IF_COUNT-PORT_COUNT_TX_DOWN,
+    parameter AXIS_DEST_WIDTH = 2,
+
+    ////////////packet_processing///////////
+
+    // Buffer configuration
+    parameter META_DATA_WIDTH_MAX=96,
+    parameter COUNT_META_DATA_MAX=(META_DATA_WIDTH_MAX/AXIS_DATA_WIDTH)+1,
+    parameter COUNTER_WIDTH= $clog2(COUNT_META_DATA_MAX+1),
+
+    parameter BUFFER_DATA_WIDTH=COUNT_META_DATA_MAX*AXIS_DATA_WIDTH,
+
+    // State
+    parameter STATE_WIDTH           = 3,
+
+    parameter IDLE                  = 0,
+    parameter PARSE_DATA            = 1,
+    parameter CONTROL               = 2,
+    parameter SEND_ANALYSED_DATA    = 3,
+    parameter SEND_REMAIN           = 4,
+    parameter DROP                  = 5,
+    parameter TCAM_INIT             = 6,
+
+    //TCAM parameter
+    parameter TCAM_ADDR_WIDTH=4,
+    parameter TCAM_KEY_WIDTH =96,
+    parameter TCAM_DATA_WIDTH=4,
+    parameter TCAM_MASK_DISABLE=0,
+    parameter TCAM_RAM_STYLE="block",
+
+    ///////////Switch//////////
+    parameter S_COUNT=3,
+    parameter M_COUNT=3,
+    parameter KEEP_ENABLE=(AXIS_DATA_WIDTH>8),
+    parameter ID_ENABLE=0,
+    parameter S_ID_WIDTH=8,
+    parameter M_ID_WIDTH=8,
+    parameter USER_ENABLE=0,
+    parameter USER_WIDTH=1,
+    parameter M_BASE=0,
+    parameter M_TOP=0,
+    parameter M_CONNECT=({3{{3{1'b1}}}}),
+    parameter UPDATE_TID=0,
+    parameter S_REG_TYPE=0,
+    parameter M_REG_TYPE=2,
+    parameter ARB_TYPE_ROUND_ROBIN=1,
+    parameter ARB_LSB_HIGH_PRIORITY=1,
+
+    //////////packet_scheduling//////////
+
+    //FIFO parameter
+    parameter PACKET_SCHEDULING_ENABLE_DOWN=1,
+    parameter PACKET_SCHEDULING_ENABLE_UP=0,
+
+    parameter N_FIFO=3,
+    
+    parameter FIFO0_DEPTH = 4096*256,
+    parameter FIFO1_DEPTH = 4096*256,
+    parameter FIFO2_DEPTH = 4096*256,
+
+    parameter FIFO_DATA_WIDTH = 64,
+    parameter FIFO_KEEP_ENABLE = (AXIS_DATA_WIDTH>8),
+    parameter FIFO_KEEP_WIDTH = ((AXIS_DATA_WIDTH+7)/8),
+    parameter FIFO_LAST_ENABLE = 1,
+    parameter FIFO_ID_ENABLE = 0,
+    parameter FIFO_ID_WIDTH = 8,
+    parameter FIFO_DEST_ENABLE = 0,
+    parameter FIFO_DEST_WIDTH = 8,
+    parameter FIFO_USER_ENABLE = 0,
+    parameter FIFO_USER_WIDTH = 1,
+    parameter FIFO_RAM_PIPELINE = 1,
+    parameter FIFO_OUTPUT_FIFO_ENABLE = 1,
+    parameter FIFO_FRAME_FIFO = 0,
+    parameter FIFO_USER_BAD_FRAME_VALUE = 1'b1,
+    parameter FIFO_USER_BAD_FRAME_MASK = 1'b1,
+    parameter FIFO_DROP_OVERSIZE_FRAME = FIFO_FRAME_FIFO,
+    parameter FIFO_DROP_BAD_FRAME = 0,
+    parameter FIFO_DROP_WHEN_FULL = 0,
+    parameter FIFO_MARK_WHEN_FULL = 0,
+    parameter FIFO_PAUSE_ENABLE = 0,
+    parameter FIFO_FRAME_PAUSE = FIFO_FRAME_FIFO
 )
 (
     input  wire                                           clk,
@@ -414,7 +504,7 @@ module mqnic_app_block_scheduler #
     output wire [PORT_COUNT-1:0]                          m_axis_sync_rx_tlast,
     output wire [PORT_COUNT*AXIS_SYNC_RX_USER_WIDTH-1:0]  m_axis_sync_rx_tuser,
 
-    /*
+   /*
      * Ethernet (internal at interface module)
      */
     input  wire [IF_COUNT*AXIS_IF_DATA_WIDTH-1:0]         s_axis_if_tx_tdata,
@@ -841,28 +931,85 @@ assign m_axis_sync_rx_tuser = s_axis_sync_rx_tuser;
 // assign m_axis_if_rx_tid=0;
 // assign m_axis_if_rx_tuser=s_axis_if_rx_tuser;
 
- top_scheduler_down #(        
-    .IF_COUNT(IF_COUNT),
+top_scheduler #(        
+    .PORT_COUNT_RX(PORT_COUNT_RX_DOWN),
+    .PORT_COUNT_TX(PORT_COUNT_TX_DOWN),
 
-    .AXIS_DATA_WIDTH(AXIS_IF_DATA_WIDTH),
-    .AXIS_KEEP_WIDTH(AXIS_IF_KEEP_WIDTH),
-    .AXIS_DEST_WIDTH(2)
+    .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
+    .AXIS_KEEP_WIDTH(AXIS_KEEP_WIDTH),
+    .AXIS_DEST_WIDTH(AXIS_DEST_WIDTH),
+
+    .AXIL_APP_CTRL_DATA_WIDTH(AXIL_APP_CTRL_DATA_WIDTH),
+    .AXIL_APP_CTRL_ADDR_WIDTH(AXIL_APP_CTRL_ADDR_WIDTH),
+    .AXIL_APP_CTRL_STRB_WIDTH(AXIL_APP_CTRL_STRB_WIDTH),
+
+    .META_DATA_WIDTH_MAX(META_DATA_WIDTH_MAX),
+    .COUNT_META_DATA_MAX(COUNT_META_DATA_MAX),
+    .COUNTER_WIDTH(COUNTER_WIDTH),
+
+    .BUFFER_DATA_WIDTH(BUFFER_DATA_WIDTH),
+
+    .STATE_WIDTH(STATE_WIDTH),
+
+    .IDLE(IDLE),
+    .PARSE_DATA(PARSE_DATA),
+    .CONTROL(CONTROL),
+    .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
+    .SEND_REMAIN(SEND_REMAIN),
+    .DROP(DROP),
+    .TCAM_INIT(TCAM_INIT),
+
+    .TCAM_ADDR_WIDTH(TCAM_ADDR_WIDTH),
+    .TCAM_KEY_WIDTH(TCAM_KEY_WIDTH),
+    .TCAM_DATA_WIDTH(TCAM_DATA_WIDTH),
+    .TCAM_MASK_DISABLE(TCAM_MASK_DISABLE),
+    .TCAM_RAM_STYLE(TCAM_RAM_STYLE),
+
+    .PACKET_SCHEDULING_ENABLE(PACKET_SCHEDULING_ENABLE_DOWN),
+
+    .N_FIFO(N_FIFO),
+    
+    .FIFO0_DEPTH(FIFO0_DEPTH),
+    .FIFO1_DEPTH(FIFO1_DEPTH),
+    .FIFO2_DEPTH(FIFO2_DEPTH),
+
+    .FIFO_DATA_WIDTH(FIFO_DATA_WIDTH),
+    .FIFO_KEEP_ENABLE(FIFO_KEEP_ENABLE),
+    .FIFO_KEEP_WIDTH(FIFO_KEEP_WIDTH),
+    .FIFO_LAST_ENABLE(FIFO_LAST_ENABLE),
+    .FIFO_ID_ENABLE(FIFO_ID_ENABLE),
+    .FIFO_ID_WIDTH(FIFO_ID_WIDTH),
+    .FIFO_DEST_ENABLE(FIFO_DEST_ENABLE),
+    .FIFO_DEST_WIDTH(FIFO_DEST_WIDTH),
+    .FIFO_USER_ENABLE(FIFO_USER_ENABLE),
+    .FIFO_USER_WIDTH(FIFO_USER_WIDTH),
+    .FIFO_RAM_PIPELINE(FIFO_RAM_PIPELINE),
+    .FIFO_OUTPUT_FIFO_ENABLE(FIFO_OUTPUT_FIFO_ENABLE),
+    .FIFO_FRAME_FIFO(FIFO_FRAME_FIFO),
+    .FIFO_USER_BAD_FRAME_VALUE(FIFO_USER_BAD_FRAME_VALUE),
+    .FIFO_USER_BAD_FRAME_MASK(FIFO_USER_BAD_FRAME_MASK),
+    .FIFO_DROP_OVERSIZE_FRAME(FIFO_DROP_OVERSIZE_FRAME),
+    .FIFO_DROP_BAD_FRAME(FIFO_DROP_BAD_FRAME),
+    .FIFO_DROP_WHEN_FULL(FIFO_DROP_WHEN_FULL),
+    .FIFO_MARK_WHEN_FULL(FIFO_MARK_WHEN_FULL),
+    .FIFO_PAUSE_ENABLE(FIFO_PAUSE_ENABLE),
+    .FIFO_FRAME_PAUSE(FIFO_FRAME_PAUSE)
 )
- top_scheduler_down_inst (
+top_scheduler_down_inst (
     .clk(clk),
     .rst(rst),
 
-    .m_axis_top_scheduler_down_tdata     (m_axis_if_tx_tdata[AXIS_DATA_WIDTH-1:0]),
-    .m_axis_top_scheduler_down_tkeep     (m_axis_if_tx_tkeep[AXIS_KEEP_WIDTH-1:0]),
-    .m_axis_top_scheduler_down_tvalid    (m_axis_if_tx_tvalid[0]),
-    .s_axis_top_scheduler_down_tready    (s_axis_if_rx_tready[3:1]),
-    .m_axis_top_scheduler_down_tlast     (m_axis_if_tx_tlast[0]),
+    .m_axis_top_scheduler_tdata     (m_axis_if_tx_tdata[AXIS_DATA_WIDTH-1:0]),
+    .m_axis_top_scheduler_tkeep     (m_axis_if_tx_tkeep[AXIS_KEEP_WIDTH-1:0]),
+    .m_axis_top_scheduler_tvalid    (m_axis_if_tx_tvalid[0]),
+    .m_axis_top_scheduler_tready    (m_axis_if_tx_tready[0]),
+    .m_axis_top_scheduler_tlast     (m_axis_if_tx_tlast[0]),
 
-    .s_axis_top_scheduler_down_tdata     (s_axis_if_rx_tdata[AXIS_DATA_WIDTH*4-1-:3*AXIS_DATA_WIDTH]),
-    .s_axis_top_scheduler_down_tkeep     (s_axis_if_rx_tkeep[AXIS_KEEP_WIDTH*4-1-:3*AXIS_KEEP_WIDTH]),
-    .s_axis_top_scheduler_down_tvalid    (s_axis_if_rx_tvalid[3:1]),
-    .m_axis_top_scheduler_down_tready    (m_axis_if_tx_tready[0]),
-    .s_axis_top_scheduler_down_tlast     (s_axis_if_rx_tlast[3:1]),
+    .s_axis_top_scheduler_tdata     (s_axis_if_rx_tdata[AXIS_DATA_WIDTH*4-1-:3*AXIS_DATA_WIDTH]),
+    .s_axis_top_scheduler_tkeep     (s_axis_if_rx_tkeep[AXIS_KEEP_WIDTH*4-1-:3*AXIS_KEEP_WIDTH]),
+    .s_axis_top_scheduler_tvalid    (s_axis_if_rx_tvalid[3:1]),
+    .s_axis_top_scheduler_tready    (s_axis_if_rx_tready[3:1]),
+    .s_axis_top_scheduler_tlast     (s_axis_if_rx_tlast[3:1]),
 
     .w_enable_dp(reg_enable_dp),
     .w_configurable_ipv4_address(reg_configurable_ipv4_address),
@@ -870,28 +1017,85 @@ assign m_axis_sync_rx_tuser = s_axis_sync_rx_tuser;
     .w_drop_counter(w_drop_counter[95:0])
 );
 
-top_scheduler_up #(        
-    .IF_COUNT(IF_COUNT),
+top_scheduler #(        
+    .PORT_COUNT_RX(PORT_COUNT_RX_UP),
+    .PORT_COUNT_TX(PORT_COUNT_TX_UP),
 
-    .AXIS_DATA_WIDTH(AXIS_IF_DATA_WIDTH),
-    .AXIS_KEEP_WIDTH(AXIS_IF_KEEP_WIDTH),
-    .AXIS_DEST_WIDTH(2)
+    .AXIS_DATA_WIDTH(AXIS_DATA_WIDTH),
+    .AXIS_KEEP_WIDTH(AXIS_KEEP_WIDTH),
+    .AXIS_DEST_WIDTH(AXIS_DEST_WIDTH),
+
+    .AXIL_APP_CTRL_DATA_WIDTH(AXIL_APP_CTRL_DATA_WIDTH),
+    .AXIL_APP_CTRL_ADDR_WIDTH(AXIL_APP_CTRL_ADDR_WIDTH),
+    .AXIL_APP_CTRL_STRB_WIDTH(AXIL_APP_CTRL_STRB_WIDTH),
+
+    .META_DATA_WIDTH_MAX(META_DATA_WIDTH_MAX),
+    .COUNT_META_DATA_MAX(COUNT_META_DATA_MAX),
+    .COUNTER_WIDTH(COUNTER_WIDTH),
+
+    .BUFFER_DATA_WIDTH(BUFFER_DATA_WIDTH),
+
+    .STATE_WIDTH(STATE_WIDTH),
+
+    .IDLE(IDLE),
+    .PARSE_DATA(PARSE_DATA),
+    .CONTROL(CONTROL),
+    .SEND_ANALYSED_DATA(SEND_ANALYSED_DATA),
+    .SEND_REMAIN(SEND_REMAIN),
+    .DROP(DROP),
+    .TCAM_INIT(TCAM_INIT),
+
+    .TCAM_ADDR_WIDTH(TCAM_ADDR_WIDTH),
+    .TCAM_KEY_WIDTH(TCAM_KEY_WIDTH),
+    .TCAM_DATA_WIDTH(TCAM_DATA_WIDTH),
+    .TCAM_MASK_DISABLE(TCAM_MASK_DISABLE),
+    .TCAM_RAM_STYLE(TCAM_RAM_STYLE),
+
+    .PACKET_SCHEDULING_ENABLE(PACKET_SCHEDULING_ENABLE_UP),
+
+    .N_FIFO(N_FIFO),
+    
+    .FIFO0_DEPTH(FIFO0_DEPTH),
+    .FIFO1_DEPTH(FIFO1_DEPTH),
+    .FIFO2_DEPTH(FIFO2_DEPTH),
+
+    .FIFO_DATA_WIDTH(FIFO_DATA_WIDTH),
+    .FIFO_KEEP_ENABLE(FIFO_KEEP_ENABLE),
+    .FIFO_KEEP_WIDTH(FIFO_KEEP_WIDTH),
+    .FIFO_LAST_ENABLE(FIFO_LAST_ENABLE),
+    .FIFO_ID_ENABLE(FIFO_ID_ENABLE),
+    .FIFO_ID_WIDTH(FIFO_ID_WIDTH),
+    .FIFO_DEST_ENABLE(FIFO_DEST_ENABLE),
+    .FIFO_DEST_WIDTH(FIFO_DEST_WIDTH),
+    .FIFO_USER_ENABLE(FIFO_USER_ENABLE),
+    .FIFO_USER_WIDTH(FIFO_USER_WIDTH),
+    .FIFO_RAM_PIPELINE(FIFO_RAM_PIPELINE),
+    .FIFO_OUTPUT_FIFO_ENABLE(FIFO_OUTPUT_FIFO_ENABLE),
+    .FIFO_FRAME_FIFO(FIFO_FRAME_FIFO),
+    .FIFO_USER_BAD_FRAME_VALUE(FIFO_USER_BAD_FRAME_VALUE),
+    .FIFO_USER_BAD_FRAME_MASK(FIFO_USER_BAD_FRAME_MASK),
+    .FIFO_DROP_OVERSIZE_FRAME(FIFO_DROP_OVERSIZE_FRAME),
+    .FIFO_DROP_BAD_FRAME(FIFO_DROP_BAD_FRAME),
+    .FIFO_DROP_WHEN_FULL(FIFO_DROP_WHEN_FULL),
+    .FIFO_MARK_WHEN_FULL(FIFO_MARK_WHEN_FULL),
+    .FIFO_PAUSE_ENABLE(FIFO_PAUSE_ENABLE),
+    .FIFO_FRAME_PAUSE(FIFO_FRAME_PAUSE)
 )
 top_scheduler_up_inst (
     .clk(clk),
     .rst(rst),
 
-    .m_axis_top_scheduler_up_tdata     (m_axis_if_tx_tdata[AXIS_DATA_WIDTH*4-1-:3*AXIS_DATA_WIDTH]),
-    .m_axis_top_scheduler_up_tkeep     (m_axis_if_tx_tkeep[AXIS_KEEP_WIDTH*4-1-:3*AXIS_KEEP_WIDTH]),
-    .m_axis_top_scheduler_up_tvalid    (m_axis_if_tx_tvalid[3:1]),
-    .s_axis_top_scheduler_up_tready    (s_axis_if_rx_tready[0]),
-    .m_axis_top_scheduler_up_tlast     (m_axis_if_tx_tlast[3:1]),
+    .m_axis_top_scheduler_tdata     (m_axis_if_tx_tdata[AXIS_DATA_WIDTH*4-1-:3*AXIS_DATA_WIDTH]),
+    .m_axis_top_scheduler_tkeep     (m_axis_if_tx_tkeep[AXIS_KEEP_WIDTH*4-1-:3*AXIS_KEEP_WIDTH]),
+    .m_axis_top_scheduler_tvalid    (m_axis_if_tx_tvalid[3:1]),
+    .s_axis_top_scheduler_tready    (s_axis_if_rx_tready[0]),
+    .m_axis_top_scheduler_tlast     (m_axis_if_tx_tlast[3:1]),
 
-    .s_axis_top_scheduler_up_tdata     (s_axis_if_rx_tdata[AXIS_DATA_WIDTH-1:0]),
-    .s_axis_top_scheduler_up_tkeep     (s_axis_if_rx_tkeep[AXIS_KEEP_WIDTH-1:0]),
-    .s_axis_top_scheduler_up_tvalid    (s_axis_if_rx_tvalid[0]),
-    .m_axis_top_scheduler_up_tready    (m_axis_if_tx_tready[3:1]),
-    .s_axis_top_scheduler_up_tlast     (s_axis_if_rx_tlast[0]),
+    .s_axis_top_scheduler_tdata     (s_axis_if_rx_tdata[AXIS_DATA_WIDTH-1:0]),
+    .s_axis_top_scheduler_tkeep     (s_axis_if_rx_tkeep[AXIS_KEEP_WIDTH-1:0]),
+    .s_axis_top_scheduler_tvalid    (s_axis_if_rx_tvalid[0]),
+    .m_axis_top_scheduler_tready    (m_axis_if_tx_tready[3:1]),
+    .s_axis_top_scheduler_tlast     (s_axis_if_rx_tlast[0]),
 
     .w_enable_dp(reg_enable_dp),
     .w_configurable_ipv4_address(reg_configurable_ipv4_address),

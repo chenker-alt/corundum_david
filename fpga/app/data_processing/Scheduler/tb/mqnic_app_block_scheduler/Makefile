@@ -10,27 +10,39 @@ WAVES ?= 1
 COCOTB_HDL_TIMEUNIT = 1ns
 COCOTB_HDL_TIMEPRECISION = 1ps
 
-DUT      = mqnic_app_block_scheduler
+DUT      = wrapper_sim_only
 TOPLEVEL = $(DUT)
 MODULE   = test_$(DUT)
-VERILOG_SOURCES += ../../rtl/$(DUT).v
-VERILOG_SOURCES += ../../rtl/top_scheduler_down.v
-VERILOG_SOURCES += ../../rtl/top_packet_dispatcher.v
-VERILOG_SOURCES += ../../rtl/axis_packet_dispatcher_demultiplexeur.v
-VERILOG_SOURCES += ../../rtl/axis_packet_dispatcher_multiplexeur.v
-VERILOG_SOURCES += ../../rtl/buffer_parser_packet_dispatcher.v
-VERILOG_SOURCES += ../../rtl/mat_packet_dispatcher.v
-VERILOG_SOURCES += ../../rtl/FSM_packet_dispatcher.v
-VERILOG_SOURCES += ../../rtl/top_priority_FIFO.v
-VERILOG_SOURCES += ../../rtl/axis_FIFO_mult.v
-VERILOG_SOURCES += ../../rtl/crossbar.v
-VERILOG_SOURCES += ../../rtl/top_scheduler_up.v
-VERILOG_SOURCES += ../../rtl/axis_tdest_demux.v
 
-VERILOG_SOURCES += ../../lib/axi/rtl//axil_reg_if.v
-VERILOG_SOURCES += ../../lib/axi/rtl//axil_reg_if_rd.v
-VERILOG_SOURCES += ../../lib/axi/rtl//axil_reg_if_wr.v 
+VERILOG_SOURCES += ../../rtl/$(DUT).v
+VERILOG_SOURCES += ../../rtl/mqnic_app_block_scheduler.v
+VERILOG_SOURCES += ../../rtl/top_scheduler.v
+
+VERILOG_SOURCES += ../../rtl/packet_scheduling/top_priority_FIFO.v
+VERILOG_SOURCES += ../../rtl/packet_scheduling/FIFO_sched.v
+
+VERILOG_SOURCES += ../../rtl/packet_processing/top_packet_dispatcher.v
+VERILOG_SOURCES += ../../rtl/packet_processing/axis_packet_dispatcher_demultiplexeur.v
+VERILOG_SOURCES += ../../rtl/packet_processing/axis_packet_dispatcher_multiplexeur.v
+VERILOG_SOURCES += ../../rtl/packet_processing/buffer_parser_packet_dispatcher.v
+VERILOG_SOURCES += ../../rtl/packet_processing/init_rst_tcam.v
+VERILOG_SOURCES += ../../rtl/packet_processing/FSM_packet_dispatcher.v
+
+VERILOG_SOURCES += ../../lib/axis/rtl/axis_register.v
+VERILOG_SOURCES += ../../lib/axis/rtl/arbiter.v
+VERILOG_SOURCES += ../../lib/axis/rtl/priority_encoder.v
+VERILOG_SOURCES += ../../lib/axis/rtl/axis_mux.v
 VERILOG_SOURCES += ../../lib/axis/rtl/axis_fifo.v
+VERILOG_SOURCES += ../../lib/axis/rtl/axis_switch.v
+
+VERILOG_SOURCES += ../../lib/axi/rtl/axil_reg_if.v
+VERILOG_SOURCES += ../../lib/axi/rtl/axil_reg_if_rd.v
+VERILOG_SOURCES += ../../lib/axi/rtl/axil_reg_if_wr.v 
+
+VERILOG_SOURCES += ../../rtl/packet_processing/tcam/tcam.v
+VERILOG_SOURCES += ../../rtl/packet_processing/tcam/tcam_line_array.v
+VERILOG_SOURCES += ../../rtl/packet_processing/tcam/tcam_line_encoder.v
+VERILOG_SOURCES += ../../rtl/packet_processing/tcam/tcam_sdpram.v
 
 # module parameters
 # export PARAM_DATA_WIDTH := 64

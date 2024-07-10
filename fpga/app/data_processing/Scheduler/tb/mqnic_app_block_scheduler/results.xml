@@ -1,0 +1,6 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1720537526" />
+    <testcase name="run_test" classname="test_wrapper_sim_only" file="/home/david/leo/fpga/app/data_processing/Scheduler/tb/mqnic_app_block_scheduler/test_wrapper_sim_only.py" lineno="1" time="7.921667098999023" sim_time_ns="68295.001" ratio_time="8621.291471416378" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,8 @@
+<testsuites name="results">
+  <testsuite name="all" package="all">
+    <property name="random_seed" value="1709135629" />
+    <testcase name="run_test_nic" classname="test_mqnic_core_pcie_us" file="/home/leomo/syncthing/Corundum_dev/corundum/fpga/app/data_processing/Scheduler/tb/mqnic_core_pcie_us/test_mqnic_core_pcie_us.py" lineno="425" time="413.24177503585815" sim_time_ns="223440.0" ratio_time="540.7004167974341">
+      <failure />
+    </testcase>
+  </testsuite>
+</testsuites>
